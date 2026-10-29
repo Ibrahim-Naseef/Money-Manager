@@ -1,7 +1,8 @@
-import {useState,useMemo,useEffect} from 'react';
-import {useLiveQuery} from 'dexie-react-hooks';
+import {useState,useMemo,useEffect,lazy,Suspense} from 'react';
 import {PieChart,Pie,Cell,BarChart,Bar,XAxis,Tooltip,ResponsiveContainer} from 'recharts';
-import {db,GROUPS,COL,CATS,KINDS,inr} from './db';
+import {db,useLiveQuery,GROUPS,COL,CATS,KINDS,inr} from './db';
+const Scene=lazy(()=>import('./Scene'));
+const Ring=lazy(()=>import('./Scene').then(m=>({default:m.Ring})));
 const today=()=>new Date().toISOString().slice(0,10);
 const ym=d=>d.slice(0,7);
 const shift=(m,n)=>{const d=new Date(m+'-01T00:00');d.setMonth(d.getMonth()+n);return d.toLocaleDateString('en-CA').slice(0,7)};
@@ -14,7 +15,7 @@ export default function App(){
   const [dark,setDark]=useState(()=>localStorage.theme?localStorage.theme==='dark':matchMedia('(prefers-color-scheme:dark)').matches);
   useEffect(()=>{document.documentElement.dataset.theme=dark?'dark':'light';localStorage.theme=dark?'dark':'light'},[dark]);
   const accs=useLiveQuery(()=>db.accounts.toArray(),[])||[];
-  const tx=useLiveQuery(()=>db.txns.orderBy('date').reverse().toArray(),[])||[];
+  const tx=useLiveQuery(()=>db.txns.toArray().then(r=>r.sort((a,b)=>b.date.localeCompare(a.date))),[])||[];
   const goals=useLiveQuery(()=>db.goals.toArray(),[])||[];
   const bills=useLiveQuery(()=>db.bills.toArray(),[])||[];
   const bal=useMemo(()=>{const b={};accs.forEach(a=>b[a.id]=+a.open||0);
@@ -43,18 +44,21 @@ export default function App(){
   const Sel=({name,opts,def,onChange})=><select name={name} defaultValue={def} onChange={onChange}>{opts.map(o=><option key={o[0]??o} value={o[0]??o}>{o[1]??o}</option>)}</select>;
   const accOpts=accs.map(a=>[a.id,a.name]);
 
-  return <div className="app">
+  const T='.grid .card,.acc';
+  const items=Object.keys(g).map(k=>({name:GROUPS[k],val:inr(g[k]),h:g[k]/Math.max(...Object.values(g),1)*3,color:COL[k]}));
+  return <div className="app" onPointerMove={e=>{const c=e.target.closest(T);if(c&&e.pointerType!=='touch'){const b=c.getBoundingClientRect(),x=(e.clientX-b.left)/b.width-.5,y=(e.clientY-b.top)/b.height-.5;c.style.transform=`perspective(700px) rotateY(${x*14}deg) rotateX(${-y*14}deg)`}}} onPointerOut={e=>{const c=e.target.closest(T);if(c)c.style.transform=''}}>
     <header><div><small>Net worth</small><h1>{inr(net)}</h1></div><button className="ghost" onClick={()=>setDark(!dark)}>{dark?'Light':'Dark'}</button></header>
     <main>
     {tab==='home'&&<>
       <MonthNav/>
       <section className="hero"><small>Where your salary went</small><h2>{inr(inc)}</h2>
+        <div className="stage"><Suspense fallback={<p className="empty">Loading 3D…</p>}><Scene items={items}/></Suspense></div>
         <div className="bar">{Object.keys(g).map(k=><i key={k} style={{width:g[k]/base*100+'%',background:COL[k]}}/>)}</div>
         <div className="legend">{Object.keys(g).map(k=><div key={k}><s style={{background:COL[k]}}/>{GROUPS[k]}<b>{inr(g[k])}</b><em>{pct(g[k])}</em></div>)}</div>
         <p className="left">{inc-out>=0?`${inr(inc-out)} unassigned`:`Spent ${inr(out-inc)} more than you earned`}</p></section>
       <div className="grid">
         <div className="card"><small>Burn</small><b>{inr(burn)}</b><em>essential {inr(g.survive)} · lifestyle {inr(g.live)}</em></div>
-        <div className="card"><small>Runway</small><b>{runway.toFixed(1)} / 6 mo</b><div className="track"><i style={{width:Math.min(100,runway/6*100)+'%',background:COL.protect}}/></div></div>
+        <div className="card ringcard"><small>Runway</small><b>{runway.toFixed(1)} / 6 mo</b><em>of essential burn</em><div className="ring"><Suspense fallback={null}><Ring v={Math.min(1,runway/6)}/></Suspense></div></div>
         <div className="card"><small>Build</small><b>{inr(g.grow)}</b><em>{pct(g.grow)} of income</em></div>
         <div className="card"><small>Play</small><b>{inr(g.live)}</b><em>spend it without guilt</em></div>
       </div>
@@ -68,7 +72,7 @@ export default function App(){
       <div><b>{t.type==='move'?'Transfer':t.cat}</b><em>{t.note||''} {accName(t.acc)}{t.to?' → '+accName(t.to):''} · {t.date.slice(8)}/{t.date.slice(5,7)}</em></div>
       <span className={t.type}>{t.type==='in'?'+':t.type==='out'?'−':''}{inr(t.amt)}</span></div>):<p className="empty">Nothing here. Tap + to add a transaction.</p>}</div></>}
     {tab==='accounts'&&<>
-      {accs.map(a=><div className="card row" key={a.id}><div><b>{a.name}</b><em>{a.kind}</em></div><div className="r"><b>{inr(bal[a.id]||0)}</b><button className="x" onClick={async()=>{if(confirm('Delete account and its transactions?')){await db.txns.where('acc').equals(a.id).delete?.();await db.txns.filter(t=>t.acc===a.id||t.to===a.id).delete();await db.accounts.delete(a.id)}}}>Remove</button></div></div>)}
+      {accs.map(a=><div className="card row acc" key={a.id}><div><b>{a.name}</b><em>{a.kind}</em></div><div className="r"><b>{inr(bal[a.id]||0)}</b><button className="x" onClick={async()=>{if(confirm('Delete account and its transactions?')){await db.txns.deleteWhere(t=>t.acc===a.id||t.to===a.id);await db.accounts.delete(a.id)}}}>Remove</button></div></div>)}
       {!accs.length&&<p className="empty">Add your first account to start tracking.</p>}
       <button className="primary" onClick={()=>setSheet('acc')}>Add account</button>
       <div className="card"><small>Your data</small><p className="note">Stored on this device in your browser. Back it up now and then.</p>

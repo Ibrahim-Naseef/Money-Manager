@@ -1,6 +1,8 @@
 import Dexie from 'dexie';
+export {useLiveQuery} from 'dexie-react-hooks';
 export const db=new Dexie('paisa');
 db.version(1).stores({accounts:'++id',txns:'++id,date,type',goals:'++id',bills:'++id'});
+db.txns.deleteWhere=async f=>db.txns.bulkDelete((await db.txns.toArray()).filter(f).map(x=>x.id));
 // Money Architecture: Survive (essential burn), Protect (runway), Grow (build), Live (play)
 export const GROUPS={survive:'Survive',protect:'Protect',grow:'Grow',live:'Live'};
 export const COL={survive:'#1F8A7A',protect:'#3D5AFE',grow:'#F2A33A',live:'#E4584C'};
