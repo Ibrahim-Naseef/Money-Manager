@@ -12,11 +12,10 @@
   "react": "^18.3.1",
   "react-dom": "^18.3.1",
   "recharts": "^2.12.7",
-  "dexie": "^4.0.8",
-  "dexie-react-hooks": "^1.1.7",
   "three": "^0.160.0",
   "@react-three/fiber": "^8.15.19",
-  "@react-three/drei": "^9.99.0"
+  "@react-three/drei": "^9.99.0",
+  "@neondatabase/serverless": "^0.10.4"
  },
  "devDependencies": {
   "@vitejs/plugin-react": "^4.3.1",
